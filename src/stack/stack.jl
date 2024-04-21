@@ -366,18 +366,18 @@ struct DimStack{K,T,N,L,D<:Tuple,R<:Tuple,LD<:NamedTuple{K},M,LM<:Union{Nothing,
     layerdims::LD
     metadata::M
     layermetadata::LM
-    function DimStack(
-        data, dims, refdims, layerdims::LD, metadata, layermetadata
-    ) where LD<:NamedTuple{K} where K
-        T = data_eltype(data)
-        N = length(dims)        
-        DimStack{K,T,N}(data, dims, refdims, layerdims, metadata, layermetadata)
-    end
-    function DimStack{K,T,N}(
-        data::L, dims::D, refdims::R, layerdims::LD, metadata::M, layermetadata::LM
-    ) where {K,T,N,L,D,R,LD<:NamedTuple{K},M,LM}
-        new{K,T,N,L,D,R,LD,M,LM}(data, dims, refdims, layerdims, metadata, layermetadata)
-    end
+end
+function DimStack{K,T,N}(
+    data::L, dims::D, refdims::R, layerdims::LD, metadata::M, layermetadata::LM
+) where {K,T,N,L,D,R,LD<:NamedTuple{K},M,LM}
+    DimStack{K,T,N,L,D,R,LD,M,LM}(data, dims, refdims, layerdims, metadata, layermetadata)
+end
+function DimStack(
+    data, dims, refdims, layerdims::LD, metadata, layermetadata
+) where LD<:NamedTuple{K} where K
+    T = data_eltype(data)
+    N = length(dims)        
+    DimStack{K,T,N}(data, dims, refdims, layerdims, metadata, layermetadata)
 end
 DimStack(@nospecialize(das::AbstractDimArray...); kw...) = DimStack(collect(das); kw...)
 DimStack(@nospecialize(das::Tuple{Vararg{AbstractDimArray}}); kw...) = DimStack(collect(das); kw...)
