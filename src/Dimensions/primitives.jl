@@ -5,7 +5,8 @@
     dimsmatch([f], dim, query) => Bool
     dimsmatch([f], dims::Tuple, query::Tuple) => Bool
 
-Compare 2 dimensions or `Tuple` of `Dimension` are of the same base type.
+Compare 2 dimensions or `Tuple` of `Dimension` are of the same base type,
+or are at least rotations/transformations of the same type.
 
 `f` is `<:` by default, but can be `>:` to match abstract types to concrete types.
 """
@@ -530,15 +531,9 @@ These are all `Bool` flags:
     which will be added to error or warning mesages.
 """
 function comparedims end
-<<<<<<< HEAD
 @inline comparedims(args...; kw...)::Bool =
     _comparedims(args...; msg=Throw(), kw...)
 @inline comparedims(::Type{Bool}, args...; kw...)::Bool =
-=======
-@inline comparedims(args...; kw...) =
-    _comparedims(args...; msg=Throw(), kw...)
-@inline comparedims(::Type{Bool}, args...; kw...) =
->>>>>>> 1324daa6 (performance tuning)
     _comparedims(args...; msg=nothing, kw...)
 
 abstract type AbstractMessage{M} end
@@ -575,7 +570,6 @@ _failed_comparedims(t::Throw, msg_intro) = throw(DimensionMismatch(string(msg_in
 
 @inline _comparedims(xs...; kw...) = _comparedims(map(dims, xs)...; kw...)
 @inline _comparedims(; kw...) = true
-<<<<<<< HEAD
 @inline _comparedims(dt::DimTupleOrEmpty, (dt1, dts...)::Union{DimTupleOrEmpty,Nothing}...; kw...) =
     all((_comparedims(dt, dt1; kw...), _comparedims(dt, dts...; kw...)...))
 @inline _comparedims(dt::DimTupleOrEmpty, ::Nothing) = true
@@ -583,9 +577,6 @@ _failed_comparedims(t::Throw, msg_intro) = throw(DimensionMismatch(string(msg_in
     _comparedims(dt, dts...; kw...)
 @inline _comparedims(::Nothing, ::Nothing...; kw...) = true
 @inline _comparedims((a1, as...)::DimTupleOrEmpty, (b1, bs...)::DimTupleOrEmpty; kw...) =
-=======
-@inline _comparedims((a1, as...)::DimTuple, (b1, bs...)::DimTuple; kw...) =
->>>>>>> 1324daa6 (performance tuning)
     all((_comparedims(a1, b1; kw...), _comparedims(as, bs; kw...)...))
 @inline _comparedims(dt::DimTupleOrEmpty; kw...) = true
 
@@ -641,7 +632,6 @@ _failed_comparedims(t::Throw, msg_intro) = throw(DimensionMismatch(string(msg_in
 end
 
 @inline promotedims(; kw...) = ()
-<<<<<<< HEAD
 @inline promotedims(dt1::DimTuple, dts::DimTuple...; kw...)::DimTupleOrEmpty =
     (promotedims(first(dt1), map(first, dts)...; kw...), promotedims(tail(dt1), map(tail, dts)...; kw...)...)
 @inline promotedims(dt1::DimTupleOrEmpty, dts::DimTupleOrEmpty...; kw...)::DimTupleOrEmpty =
@@ -650,22 +640,6 @@ end
 @inline promotedims(::Tuple{}; kw...) = ()
 
 @inline promotedims(d1::Dimension; kw...) = d1
-=======
-@inline function promotedims(dt1::DimTupleOrEmpty, dts::DimTupleOrEmpty...;
-    skip_length_one=false, kw...
-)
-    # Combine dimensions
-    combined = combinedims(dt1, dts...; ignore_length_one=skip_length_one, kw...)
-    # Remove any anomymous
-    filtered = otherdims(combined, AnonDim())
-    sorted = map((dt1, dts...)) do dt
-        sortdims(dt, filtered)
-    end
-    return map(sorted...) do ds...
-        promotedims(_remove_nothing(ds)...; skip_length_one)
-    end
-end
->>>>>>> 1324daa6 (performance tuning)
 @inline function promotedims(d1::Dimension, ds::Dimension...; skip_length_one=false)
     ls = lookup(ds)
     l = promote_first(lookup(d1), ls...)
