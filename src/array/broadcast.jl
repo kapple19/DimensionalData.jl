@@ -36,7 +36,7 @@ BroadcastStyle(a::Style{Tuple}, ::DimensionalStyle{B}) where {B} = DimensionalSt
 function Broadcast.copy(bc::Broadcasted{DimensionalStyle{S}}) where S
     bdims = _broadcasted_dims(bc)
     comparedims(bdims...; ignore_length_one=true, order=true, val=true, msg=Dimensions.Throw())
-    dims = Dimensions.promotedims(bdims...; skip_length_one=true)
+    dims = Dimensions.promotedims(bdims...; skip_length_one=true, check=false)
     A = _firstdimarray(bc)
     data = copy(_unwrap_broadcasted(bc))
     return if A isa Nothing || dims isa Nothing || !(data isa AbstractArray)
@@ -97,10 +97,9 @@ _firstdimarray(x::Tuple{}) = nothing
 
 # Make sure all arrays have the same dims, and return them
 _broadcasted_dims(bc::Broadcasted) = _broadcasted_dims(bc.args...)
-_broadcasted_dims(a, bs...) =
-    comparedims(_broadcasted_dims(a), _broadcasted_dims(bs...); ignore_length_one=true, order=true)
-_broadcasted_dims(a::AbstractBasicDimArray) = dims(a)
-_broadcasted_dims(a) = nothing
+_broadcasted_dims(a, bs...) = (_broadcasted_dims(a)..., _broadcasted_dims(bs...)...)
+_broadcasted_dims(a::AbstractBasicDimArray) = (dims(a),)
+_broadcasted_dims(a) = ()
 
 """
     @d broadcast_expression options
@@ -118,7 +117,7 @@ not passed in namedtuple variable.
 
 # Options
 
-- `order`: Pass a Tuple of `Dimension`s, `Dimension` types or `Symbol`s
+- `dims`: Pass a Tuple of `Dimension`s, `Dimension` types or `Symbol`s
     to fix the dimension order of the output array. Otherwise dimensions
     will be in order of appearance.
 - `strict`: `true` or `false`. Check that all lookup values match explicitly.
@@ -130,28 +129,33 @@ da1 = ones(X(3))
 da2 = fill(2, Y(4), X(3))
 
 @d da1 .* da2
-@d da1 .* da2 .+ 5 order=(Y, X)
+@d da1 .* da2 .+ 5 dims=(Y, X)
 ```
 
 """
 macro d(expr::Expr, options::Union{Expr,Nothing}=nothing)
     options_dict = _process_d_macro_options(options)
     broadcast_expr, var_list = _wrap_broadcast_vars(expr)
-    var_list_expr = Expr(:tuple, var_list...)
-    dims_expr = if haskey(options_dict, :order)
-        order = options_dict[:order]
+    var_list_assignments = map(var_list) do (name, expr)
+        Expr(:(=), name, expr)
+    end
+    vars_expr = Expr(:tuple, map(first, var_list)...)
+    var_list_expr = Expr(:block, var_list_assignments...)
+    dims_expr = if haskey(options_dict, :dims)
+        order_dims = options_dict[:dims]
         quote
-            order_dims = $order
+            order_dims = $order_dims
             found_dims = _find_dims(vars)
             all(hasdim(order_dims, found_dims)) || throw(ArgumentError("order $(basedims(order_dims)) dont match dimensions found in arrays $(basedims(found_dims))"))
-            dims = $DimensionalData.dims(found_dims, $order)
+            dims = $DimensionalData.dims(found_dims, order_dims)
         end
     else
         :(dims = _find_dims(vars))
     end
     quote
         let
-            vars = $var_list_expr
+            $var_list_expr
+            vars = $vars_expr
             $dims_expr
             $broadcast_expr
         end
@@ -188,8 +192,7 @@ end
 
 _wrap_broadcast_vars(sym::Symbol) = esc(sym), Expr[]
 function _wrap_broadcast_vars(expr::Expr)
-    arg_list = Expr[]
-    arg1 = expr.args[1]
+    arg_list = Pair{Symbol,Expr}[]
     if expr.head == :. # function dot broadcast
         if expr.args[2] isa Expr
             tuple_args = map(expr.args[2].args) do arg
@@ -198,8 +201,9 @@ function _wrap_broadcast_vars(expr::Expr)
                     append!(arg_list, arg_list1)
                     expr1
                 else
-                    push!(arg_list, esc(arg))
-                    Expr(:call, :_maybe_dimensional_broadcast, esc(arg), :dims)
+                    var = Symbol(gensym(), :var)
+                    push!(arg_list, var => esc(arg))
+                    Expr(:call, :_maybe_dimensional_broadcast, var, :dims)
                 end
             end
             expr2 = Expr(expr.head, esc(expr.args[1]), Expr(:tuple, tuple_args...))
@@ -212,19 +216,20 @@ function _wrap_broadcast_vars(expr::Expr)
                 append!(arg_list, arg_list1)
                 expr1
             else
-                push!(arg_list, esc(arg))
-                Expr(:call, :_maybe_dimensional_broadcast, esc(arg), :dims)
+                var = Symbol(gensym(), :var)
+                push!(arg_list, var => esc(arg))
+                Expr(:call, :_maybe_dimensional_broadcast, var, :dims)
             end
         end
         expr2 = Expr(expr.head, expr.args[1], args...)
         return expr2, arg_list
-    else # Not part of the broadcast, just wrap it and return
-        expr2 = Expr(:call, :_maybe_dimensional_broadcast, esc(expr), :dims)
+    else # Not part of the broadcast, just wrap return it
+        expr2 = esc(expr)
         return expr2, arg_list
     end
 end
 
-Base.@assume_effects :total function _find_dims((A, args...)::Tuple{<:AbstractDimArray,Vararg})
+@inline function _find_dims((A, args...)::Tuple{<:AbstractBasicDimArray,Vararg})::DimTupleOrEmpty
     expanded = _find_dims(args)
     if expanded === ()
         dims(A)
@@ -232,20 +237,55 @@ Base.@assume_effects :total function _find_dims((A, args...)::Tuple{<:AbstractDi
         (dims(A)..., otherdims(expanded, dims(A))...)
     end
 end
-Base.@assume_effects :total _find_dims((d, args...)::Tuple{<:Dimension,Vararg}) =
+@inline _find_dims((d, args...)::Tuple{<:Dimension,Vararg}) =
     (d, otherdims(_find_dims(args), (d,)))
-Base.@assume_effects :total _find_dims(::Tuple{}) = ()
-Base.@assume_effects :total _find_dims((_, args...)::Tuple) = _find_dims(args)
+@inline _find_dims(::Tuple{}) = ()
+@inline _find_dims((_, args...)::Tuple) = _find_dims(args)
 
 _maybe_dimensional_broadcast(x, _) = x
-function _maybe_dimensional_broadcast(A::AbstractDimArray, dest_dims) 
-    # Data
-    A1 = reorder(_maybe_lazy_permute(A, dest_dims), dest_dims)
-    A2 = _maybe_insert_length_one_dims(A1, dest_dims)
-    # Dims
-    l1s = basedims(otherdims(dest_dims, dims(A1)))
-    final_dims = dims((dims(A1)..., l1s...), dest_dims)
-    return rebuild(A; data=A2, dims=format(final_dims, A2))
+function _maybe_dimensional_broadcast(A::AbstractBasicDimArray, dest_dims) 
+    len1s = basedims(otherdims(dest_dims, dims(A)))
+    # Reshape first to avoid a ReshapedArray wrapper if possible
+    A1 = _maybe_insert_length_one_dims(A, dest_dims)
+    # Then permute and reorder
+    A2 = reorder(_maybe_lazy_permute(A1, dest_dims), dest_dims)
+    # Then rebuild with the new data and dims
+    data = parent(A2)
+    return rebuild(A; data, dims=format(dims(A2), data))
 end
 _maybe_dimensional_broadcast(d::Dimension, dims) = 
     _maybe_dimensional_broadcast(DimArray(parent(d), d), dims)
+
+function _maybe_lazy_permute(A::AbstractBasicDimArray, dest)
+    if dimsmatch(commondims(dims(A), dims(dest)), commondims(dims(dest), dims(A)))
+        A
+    else
+        PermutedDimsArray(A, commondims(dims(dest), dims(A)))
+    end
+end
+
+function _maybe_insert_length_one_dims(A::AbstractBasicDimArray, dims)
+    if all(hasdim(A, dims)) 
+        A 
+    else
+        _insert_length_one_dims(A, dims)
+    end
+end
+
+function _insert_length_one_dims(A::AbstractBasicDimArray, alldims)
+    if basedims(dims(A)) == basedims(dims(A), alldims)
+        lengths = map(alldims) do d 
+            hasdim(A, d) ? size(A, d) : 1
+        end
+        newdims = map(alldims) do d 
+            hasdim(A, d) ? dims(A, d) : basedims(alldims, d)
+        end
+    else
+        odims = otherdims(alldims, DD.dims(A))
+        lengths = (size(A)..., map(_ -> 1, odims)...) 
+        newdims = (dims(A)..., basedims(odims)...)
+    end
+    newdata = reshape(parent(A), lengths)
+    A1 = rebuild(A, newdata, format(newdims, newdata))
+    return A1
+end

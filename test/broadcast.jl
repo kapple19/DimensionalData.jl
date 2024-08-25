@@ -60,8 +60,8 @@ end
         @test_throws DimensionMismatch lookup(zeros(X([:a, :b, :c]),) .* zeros(X([:x, :y, :z]),), X)
         ls = (
             Sampled([10, 20, 30]; span=Irregular((nothing, nothing)), sampling=Points(), order=ForwardOrdered()),
-            Categorical([:a, :b, :c]; order=ForwardOrdered()), 
-            Categorical(["foo", "bar", "foobar"]; order=Unordered()), 
+            Categorical([:a, :b, :c]; order=ForwardOrdered()),
+            Categorical(["foo", "bar", "foobar"]; order=Unordered()),
             Sampled(1.0:1:3.0; span=Regular(1.0), sampling=Points(), order=ForwardOrdered()),
             Sampled(1.0:1:3.0; span=Regular(1.0), sampling=Intervals(Start()), order=ForwardOrdered()),
         )
@@ -73,7 +73,7 @@ end
             @test (@inferred lookup(zeros(X(l),) .* zeros(X(l[1:1]),), X)) == l
         end
         @testset "Lookup types are promoted" begin
-            a = zeros(Y((Int8(1):Int8(2):Int8(9)))) 
+            a = zeros(Y((Int8(1):Int8(2):Int8(9))))
             b = zeros(Y(1:2:9))
             c = @inferred a .+ b
             @test lookup(c) === lookup(b)
@@ -81,7 +81,7 @@ end
             b = zeros(Y(1:1:10))
             c = @inferred a .+ b
             @test lookup(c) === lookup(a)
-            a = zeros(Y((Float16(1):Float16(2):Float16(9)))) 
+            a = zeros(Y((Float16(1):Float16(2):Float16(9))))
             b = zeros(Y(1:2:9))
             c = @inferred a .+ b
             @test lookup(c) === lookup(a)
@@ -253,7 +253,15 @@ end
     # check that dest is written into:
     z .= ab .+ ba'
     @test z == (ab.data .+ ba.data')
+<<<<<<< HEAD
     @test z == (ab.data .+ ba.data')
+=======
+    @test_broken z == (ab.data .+ ba.data')
+    @test_broken dims(z .= ab .+ a_) ==
+        (X(NoLookup(Base.OneTo(2))), Y(NoLookup(Base.OneTo(2))))
+    @test_broken dims(a_ .= ba' .+ ab) ==
+        (X(NoLookup(Base.OneTo(2))), Y(NoLookup(Base.OneTo(2))))
+>>>>>>> 1324daa6 (performance tuning)
 end
 
 @testset "assign using named indexing and dotview" begin
@@ -327,7 +335,7 @@ end
 end
 
 @testset "@d macro" begin
-    f(x, y) = x * y 
+    f(x, y) = x * y
     da1 = ones(X(3))
     da2 = fill(2, X(3), Y(4))
     da2a = fill(2, Y(4), X(3))
@@ -337,7 +345,7 @@ end
     @d 0 .+ f.(da2, da1) .* f.(da1 ./ 1, da2a)
     @d da1 .* da2
     @d da2
-    @d da3 .+ f.(da2, da1) .* f.(da1 ./ 1, da2a) 
+    @d da3 .+ f.(da2, da1) .* f.(da1 ./ 1, da2a)
 
     res = @d da3 .* f.(da2, da1) .* f.(da1 ./ 1, da2a) (; order=(X, Y, Z),)
     @test all(==(12.0), res)
@@ -347,11 +355,9 @@ end
 
     res = @d da3 .* f.(da2, da1) .* f.(da1 ./ 1, da2a) (; order=(X, Y, Z),)
 
-    # p(da1, da2, da3) = @d da3 .* f.(da2, da1) .* f.(da1 ./ 1, da2a) (; order=(X(), Y(), Z()),)
-    # p(da1, da2, da3)
-
-    # using ProfileView
-    # @profview for i in 1:100000 p(da1, da2, da3) end
+    p(da1, da2, da3, n) = for i in 1:n @d da3 .* f.(da2, da1) .* f.(da1 ./ 1, da2) dims=(X(), Y(), Z()) end
+    p(da1, da2, da3, 10000)
+    @profview p(da1, da2, da3, 100000)
 end
 
 # @testset "Competing Wrappers" begin
@@ -359,7 +365,7 @@ end
 #     ta = TrackedArray(5 * ones(4))
 #     dt = DimArray(TrackedArray(5 * ones(4)), X)
 #     arrays = (da, ta, dt)
-#     @testset "$a .- $b" 
+#     @testset "$a .- $b"
 #     for (a, b) in Iterators.product(arrays, arrays)
 #         a === b && continue
 #         @test typeof(da .- ta) <: DimArray

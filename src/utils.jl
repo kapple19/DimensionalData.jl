@@ -176,30 +176,6 @@ function _broadcast_dims_inner!(f, dest, As, od)
     return dest
 end
 
-function _maybe_lazy_permute(A, dest)
-    # @show A dest
-    if dimsmatch(commondims(dims(A), dims(dest)), commondims(dims(dest), dims(A)))
-        A
-    else
-        PermutedDimsArray(A, commondims(dims(dest), dims(A)))
-    end
-end
-
-function _maybe_insert_length_one_dims(A, dims)
-    if all(hasdim(A, dims)) 
-        parent(A) 
-    else
-        _insert_length_one_dims(A, dims)
-    end
-end
-
-function _insert_length_one_dims(A, alldims)
-    lengths = map(alldims) do d 
-        hasdim(A, d) ? size(A, d) : 1
-    end
-    return reshape(parent(A), lengths)
-end
-
 @deprecate dimwise broadcast_dims
 @deprecate dimwise! broadcast_dims!
 
