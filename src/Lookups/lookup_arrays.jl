@@ -156,6 +156,16 @@ rebuild(l::NoLookup; data=parent(l), kw...) = NoLookup(data)
 
 Base.step(lookup::NoLookup) = 1
 
+# Used in @d broadcasts
+struct Length1NoLookup <:  Aligned{Int,Order}end
+Length1NoLookup(::AbstractVector) = Length1NoLookup()
+
+rebuild(l::Length1NoLookup; kw...) = Length1NoLookup()
+Base.parent(::Length1NoLookup) = Base.OneTo(1)
+
+Base.step(lookup::Length1NoLookup) = 1
+
+
 """
     AbstractSampled <: Aligned
 
@@ -828,6 +838,7 @@ ordering(::ReverseOrdered) = Base.Order.ReverseOrdering()
 promote_first(l1::Lookup) = l1
 promote_first(l1::L, ls::L...) where L<:Lookup = rebuild(l1; metadata=NoMetadata)
 function promote_first(l1::L, ls::Lookup...) where {L<:Lookup} 
+    l1, ls = _remove(Length1NoLookup, l1, ls...)
     if all(map(l -> typeof(l) == L, ls))
         if length(ls) > 0
             rebuild(l1; metadata=NoMetadata())
@@ -838,6 +849,7 @@ function promote_first(l1::L, ls::Lookup...) where {L<:Lookup}
         NoLookup(Base.OneTo(length(l1)))
     end
 end
+# Categorical lookups
 promote_first(l1::AbstractCategorical) = l1
 promote_first(l1::C, ls::C...) where C<:AbstractCategorical = l1
 promote_first(l1::C, ::C, ::C...) where C<:AbstractCategorical = rebuild(l1; metadata=NoMetadata())

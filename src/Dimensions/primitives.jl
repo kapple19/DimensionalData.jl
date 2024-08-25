@@ -149,8 +149,8 @@ function dims end
 @inline dims(a1, args...) = _dim_query(_dims, MaybeFirst(), a1, args...)
 @inline dims(::Tuple{}, ::Tuple{}) = ()
 
-@inline _dims(f, dims, query) = _remove_nothing(_sortdims(f, dims, query))
-@inline _dims(f, dims, query...) = _remove_nothing(_sortdims(f, dims, query))
+@inline _dims(f, dims, query) = _remove(Nothing, _sortdims(f, dims, query))
+@inline _dims(f, dims, query...) = _remove(Nothing, _sortdims(f, dims, query))
 
 """
     commondims([f], x, query) => Tuple{Vararg{Dimension}}
@@ -635,7 +635,7 @@ end
 @inline promotedims(dt1::DimTuple, dts::DimTuple...; kw...)::DimTupleOrEmpty =
     (promotedims(first(dt1), map(first, dts)...; kw...), promotedims(tail(dt1), map(tail, dts)...; kw...)...)
 @inline promotedims(dt1::DimTupleOrEmpty, dts::DimTupleOrEmpty...; kw...)::DimTupleOrEmpty =
-    promotedims(_remove_empty(dt1, dts...)...; kw...)
+    promotedims(_remove(Tuple{}, dt1, dts...)...; kw...)
 @inline promotedims(dt::DimTuple)::DimTupleOrEmpty = dt
 @inline promotedims(::Tuple{}; kw...) = ()
 
@@ -782,17 +782,13 @@ end
 
 # Utils
 
-# Remove empty tuples
-@inline _remove_empty(::Tuple{}, xs...) = _remove_empty(xs...)
-@inline _remove_empty(x::Tuple, xs...) = (x, _remove_empty(xs...)...)
-@inline _remove_empty(::Tuple{}) = ()
-@inline _remove_empty(x::Tuple) = (x,)
+@inline _remove_empty(xs...) = _remove(Tuple{}, xs...)
+@inline _remove_nothing(xs...) = _remove(Nothing, xs...)
 
-# Remove `nothing` from a `Tuple`
-@inline _remove_nothing(xs::Tuple) = _remove_nothing(xs...)
-@inline _remove_nothing(x, xs...) = (x, _remove_nothing(xs...)...)
-@inline _remove_nothing(::Nothing, xs...) = _remove_nothing(xs...)
-@inline _remove_nothing() = ()
+# Remove objects of type T from a Tuple
+@inline _remove(::Type{T}, x, xs...) where T = (x, _remove(T, xs...)...)
+@inline _remove(::Type{T}, ::T, xs...) where T = _remove(T, xs...)
+@inline _remove(::Type) = ()
 
 # This looks ridiculous, but gives seven arguments with constant-propagation,
 # which means type stability using Symbols/types instead of objects.

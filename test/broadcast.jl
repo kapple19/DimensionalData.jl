@@ -347,17 +347,33 @@ end
     @d da2
     @d da3 .+ f.(da2, da1) .* f.(da1 ./ 1, da2a)
 
-    res = @d da3 .* f.(da2, da1) .* f.(da1 ./ 1, da2a) (; order=(X, Y, Z),)
+    res = @d da3 .* f.(da2, da1) .* f.(da1 ./ 1, da2a) (; dims=(X, Y, Z),)
     @test all(==(12.0), res)
     @test DimensionalData.basedims(res) == (X(), Y(), Z())
     @test size(res) == (3, 4, 5)
-    @test_throws ArgumentError @d da3 .+ f.(da2, da1) .* f.(da1 ./ 1, da2a) order=(X, Y)
+    @test_throws ArgumentError @d da3 .+ f.(da2, da1) .* f.(da1 ./ 1, da2a) dims=(X, Y)
 
     res = @d da3 .* f.(da2, da1) .* f.(da1 ./ 1, da2a) (; order=(X, Y, Z),)
 
-    p(da1, da2, da3, n) = for i in 1:n @d da3 .* f.(da2, da1) .* f.(da1 ./ 1, da2) dims=(X(), Y(), Z()) end
-    p(da1, da2, da3, 10000)
+    f(da1, da2, da3) = @d da3 .* f.(da2, da1) .* f.(da1 ./ 1, da2) dims=(X(), Y(), Z())
+    f(da1, da2, da3, n) = for i in 1:n p(da1, da2, da3) end
+    f(da1, da2, da3, 10000)
+
+    using ProfileView
     @profview p(da1, da2, da3, 100000)
+
+    x, y, z = X(1:3), Y(DateTime(2000):Month(2):DateTime(2001)), Z(5)
+    da1 = ones(y) .* (1.0:7.0)
+    da2 = fill(2, x, y) .* (1:3)
+    da3 = fill(3, y, z, x) .* (1:7)
+    f(da1, da2, da3, 100)
+    # Order and permutaton do not matter
+    @test f(da1, da2, da3) == 
+        f(da1, reverse(da2; dims=Y), da3) == 
+        f(da1, permutedims(da2, (Y, X)), da3) == 
+        f(da1, da2, reverse(permutedims(da3, (X, Y, Z)); dims=Z)) == 
+        f(reverse(da1; dims=Y), reverse(da2; dims=X), da3)
+    f(da1, da2, da3)
 end
 
 # @testset "Competing Wrappers" begin

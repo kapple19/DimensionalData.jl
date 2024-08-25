@@ -36,7 +36,7 @@ BroadcastStyle(a::Style{Tuple}, ::DimensionalStyle{B}) where {B} = DimensionalSt
 function Broadcast.copy(bc::Broadcasted{DimensionalStyle{S}}) where S
     bdims = _broadcasted_dims(bc)
     comparedims(bdims...; ignore_length_one=true, order=true, val=true, msg=Dimensions.Throw())
-    dims = Dimensions.promotedims(bdims...; skip_length_one=true, check=false)
+    dims = Dimensions.promotedims(bdims...; skip_length_one=true)
     A = _firstdimarray(bc)
     data = copy(_unwrap_broadcasted(bc))
     return if A isa Nothing || dims isa Nothing || !(data isa AbstractArray)
@@ -278,12 +278,12 @@ function _insert_length_one_dims(A::AbstractBasicDimArray, alldims)
             hasdim(A, d) ? size(A, d) : 1
         end
         newdims = map(alldims) do d 
-            hasdim(A, d) ? dims(A, d) : basedims(alldims, d)
+            hasdim(A, d) ? dims(A, d) : rebuild(d, Length1NoLookup())
         end
     else
         odims = otherdims(alldims, DD.dims(A))
         lengths = (size(A)..., map(_ -> 1, odims)...) 
-        newdims = (dims(A)..., basedims(odims)...)
+        newdims = (dims(A)..., map(d -> rebuild(d, Length1NoLookup()), odims)...)
     end
     newdata = reshape(parent(A), lengths)
     A1 = rebuild(A, newdata, format(newdims, newdata))
