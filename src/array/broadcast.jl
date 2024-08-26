@@ -248,7 +248,7 @@ function _maybe_dimensional_broadcast(A::AbstractBasicDimArray, dest_dims)
     # Reshape first to avoid a ReshapedArray wrapper if possible
     A1 = _maybe_insert_length_one_dims(A, dest_dims)
     # Then permute and reorder
-    A2 = reorder(_maybe_lazy_permute(A1, dest_dims), dest_dims)
+    A2 = _maybe_lazy_permute(A1, dest_dims)
     # Then rebuild with the new data and dims
     data = parent(A2)
     return rebuild(A; data, dims=format(dims(A2), data))
@@ -278,12 +278,12 @@ function _insert_length_one_dims(A::AbstractBasicDimArray, alldims)
             hasdim(A, d) ? size(A, d) : 1
         end
         newdims = map(alldims) do d 
-            hasdim(A, d) ? dims(A, d) : rebuild(d, Length1NoLookup())
+            hasdim(A, d) ? dims(A, d) : rebuild(d, Lookups.Length1NoLookup())
         end
     else
         odims = otherdims(alldims, DD.dims(A))
         lengths = (size(A)..., map(_ -> 1, odims)...) 
-        newdims = (dims(A)..., map(d -> rebuild(d, Length1NoLookup()), odims)...)
+        newdims = (dims(A)..., map(d -> rebuild(d, Lookups.Length1NoLookup()), odims)...)
     end
     newdata = reshape(parent(A), lengths)
     A1 = rebuild(A, newdata, format(newdims, newdata))

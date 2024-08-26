@@ -108,6 +108,14 @@ abstract type Aligned{T,O} <: Lookup{T,1} end
 
 order(lookup::Aligned) = lookup.order
 
+
+abstract type AbstractNoLookup <: Aligned{Int,Order} end
+
+order(::AbstractNoLookup) = ForwardOrdered()
+span(::AbstractNoLookup) = Regular(1)
+
+Base.step(lookup::AbstractNoLookup) = 1
+
 """
     NoLookup <: Lookup
 
@@ -144,27 +152,20 @@ Dimensions.lookup(A)
 NoLookup, NoLookup
 ```
 """
-struct NoLookup{A<:AbstractVector{Int}} <: Aligned{Int,Order}
+struct NoLookup{A<:AbstractVector{Int}} <: AbstractNoLookup
     data::A
 end
 NoLookup() = NoLookup(AutoValues())
 
-order(lookup::NoLookup) = ForwardOrdered()
-span(lookup::NoLookup) = Regular(1)
-
 rebuild(l::NoLookup; data=parent(l), kw...) = NoLookup(data)
 
-Base.step(lookup::NoLookup) = 1
 
 # Used in @d broadcasts
-struct Length1NoLookup <:  Aligned{Int,Order}end
+struct Length1NoLookup <: AbstractNoLookup end
 Length1NoLookup(::AbstractVector) = Length1NoLookup()
 
 rebuild(l::Length1NoLookup; kw...) = Length1NoLookup()
 Base.parent(::Length1NoLookup) = Base.OneTo(1)
-
-Base.step(lookup::Length1NoLookup) = 1
-
 
 """
     AbstractSampled <: Aligned
@@ -838,7 +839,12 @@ ordering(::ReverseOrdered) = Base.Order.ReverseOrdering()
 promote_first(l1::Lookup) = l1
 promote_first(l1::L, ls::L...) where L<:Lookup = rebuild(l1; metadata=NoMetadata)
 function promote_first(l1::L, ls::Lookup...) where {L<:Lookup} 
-    l1, ls = _remove(Length1NoLookup, l1, ls...)
+    ls = _remove(Length1NoLookup, l1, ls...)
+    if length(ls) > 1 
+        l1, ls... = ls
+    else
+        return first(ls)
+    end
     if all(map(l -> typeof(l) == L, ls))
         if length(ls) > 0
             rebuild(l1; metadata=NoMetadata())
@@ -854,7 +860,6 @@ promote_first(l1::AbstractCategorical) = l1
 promote_first(l1::C, ls::C...) where C<:AbstractCategorical = l1
 promote_first(l1::C, ::C, ::C...) where C<:AbstractCategorical = rebuild(l1; metadata=NoMetadata())
 function promote_first(l1::AbstractCategorical, l2::AbstractCategorical, ls::AbstractCategorical...)
-    @show "categorical"
     ls = (l2, ls...)
     all(map(l -> order(l) == order(l1), ls)) || return NoLookup(Base.OneTo(length(l1)))
     data = promote_first_array(parent(l1), map(parent, ls)...)
