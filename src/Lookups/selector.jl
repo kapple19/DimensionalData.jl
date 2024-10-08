@@ -153,6 +153,22 @@ struct _False end
     v1, v2 = _maybeflipbounds(l, val(sel))
     selectindices(l, rebuild(sel, v1); kw...):selectindices(l, rebuild(sel, v2); kw...)
 end
+# @inline function _selecttuple(l, sel::Selector{<:Tuple{<:AbstractFloat,<:AbstractFloat}}; kw...) 
+#     v1, v2 = val(sel)
+#     nan = false
+#     if isnan(v1) 
+#         v1 = typemax(v1)
+#         nan = true
+#     end
+#     if isnan(v2) 
+#         v2 = typemin(v2)
+#         nan = true
+#     end
+#     if !nan # Don't flip after nans
+#         v1, v2 = _maybeflipbounds(v1, v2)
+#     end
+#     selectindices(l, rebuild(sel, v1); kw...):selectindices(l, rebuild(sel, v2); kw...)
+# end
 
 function at(lookup::AbstractCyclic{Cycling}, sel::At; kw...)
     cycled_sel = rebuild(sel, cycle_val(lookup, val(sel)))
@@ -631,6 +647,12 @@ end
 #     near(no_cycling(lookup), cycled_sel; kw...)
 # end
 between(l::Lookup, interval::Interval) = between(sampling(l), l, interval)
+function between(l::Lookup, interval::Interval{A,B,T}) where {A,B,T<:AbstractFloat} 
+    # Give the interfval no size if there are NaNs
+    l = isnan(interval.left) ? typemax(interval.left) : interval.left
+    r = isnan(interval.right) ? typemin(interval.right) : interval.right
+    between(sampling(l), Interval{A,B,T}(l, r))
+end
 # This is the main method called above
 function between(sampling::Sampling, l::Lookup, interval::Interval)
     isordered(l) || throw(ArgumentError("Cannot use an interval or `Between` with `Unordered`"))
