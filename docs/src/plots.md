@@ -78,6 +78,125 @@ data(ds) * mapping(X, :data; color = :color, layout = Y => nonnumeric) * visual(
     If you wish to subset your DimArray, you can't pass selectors like `X(1 .. 2)` to AlgebraOfGraphics.  
     Instead, subset the DimArray you pass to `data` - this is a very cheap operation.
 
+### `DimArray`: Some noisy sinusoidal data...
+
+Let's generate a signal's components and sum them together:
+
+```@example AoG_DimArray
+using DimensionalData
+using CairoMakie, AlgebraOfGraphics
+
+sin2pi(t) = sin(2t)
+c = 1.0
+amplitude(t, λ, φ) = sin2pi(c*t/λ + φ) + 0.5rand()
+λ = Dim{:λ}
+φ = Dim{:φ}
+
+signal_components = rebuild(
+    (
+        Ti(0 : 0.01 : 10),
+        λ(1.0 : 3),
+        φ(0 : 0.1 : 0.5)
+    ) |> DimPoints .|> splat(amplitude);
+    name = :A
+)
+
+signal = sum(signal_components; dims = otherdims(signal_components, Ti))
+signal = dropdims(signal, dims = (λ, φ))
+```
+
+#### ...colored by wavelength and gridded by phase
+
+We can compare the signal components by their wavelength and phase:
+
+```@example AoG_DimArray
+data(signal_components) * visual(linestyle = :dash) * mapping(
+    Ti, :A,
+    color = λ => nonnumeric,
+    layout = φ => nonnumeric
+) * visual(Lines) |> draw
+```
+
+Dimensions can also be invoked by their name `Symbol`s:
+
+```@example AoG_DimArray
+data(signal_components) * visual(linestyle = :dash) * mapping(
+    :Ti, :A,
+    color = :λ => nonnumeric,
+    layout = :φ => nonnumeric
+) * visual(Lines) |> draw
+```
+
+#### ...plotted for a portion of the data
+
+Sometimes we want a plot to focus on a particular aspect of the data:
+
+```@example AoG_DimArray
+data(
+    signal_components[Ti = Where(<=(5)), λ = Where(isodd), φ = 0 .. 0.2]
+) * visual(linestyle = :dash) * mapping(
+    Ti, :A,
+    color = λ => nonnumeric,
+    layout = φ => nonnumeric
+) * visual(Lines) |> draw
+```
+
+#### ...compared with the data summation
+
+AlgebraOfGraphics nicely composes plots together.
+We can plot components on top of the signal:
+
+```@example AoG_DimArray
+(
+    data(signal)
+    + data(signal_components) * visual(linestyle = :dash) * mapping(
+    color = :λ => nonnumeric,
+    layout = :φ => nonnumeric
+    )
+) * visual(Lines) * mapping(:Ti, :A) |> draw
+```
+
+#### ...smoothed
+
+Since the data is noisy,
+we can use AlgebraOfGraphics' simple `smooth`ener
+to get a clearer idea of what the underlying signal components look like:
+
+```@example AoG_DimArray
+data(signal_components) * AlgebraOfGraphics.smooth(span = 0.2) * mapping(
+    :Ti, :A,
+    color = :λ => nonnumeric,
+    layout = :φ => nonnumeric
+) |> draw
+```
+
+#### ...smoothed alongside scattered data
+
+We may also want to see the smoothened components alongside the original data:
+
+```@example AoG_DimArray
+(
+    AlgebraOfGraphics.smooth(span = 0.2)
+    + visual(Scatter, markersize = 2, alpha = 0.4)
+) * data(signal_components) * mapping(
+    :Ti, :A,
+    color = :λ => nonnumeric,
+    layout = :φ => nonnumeric
+) |> draw
+```
+
+#### ...smoothed with two legends
+
+And sometimes more visual indicators assist with identifiability:
+
+```@example AoG_DimArray
+data(signal_components) * AlgebraOfGraphics.smooth(span = 0.2) * mapping(
+    linestyle = λ => nonnumeric,
+    color = φ => nonnumeric,
+    layout = λ => nonnumeric
+) * visual(Lines) * mapping(Ti, :A) |> draw
+```
+
 ## Test series plots
 
 ### default colormap
