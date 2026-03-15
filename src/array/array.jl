@@ -964,3 +964,14 @@ _unmergedims(all_dims, dim_pairs::Pair...) = _cat_tuples(replace(all_dims, dim_p
 _cat_tuples(tuples...) = mapreduce(_astuple, (x, y) -> (x..., y...), tuples)
 
 _filter_dims(alldims, dims) = filter(dim -> hasdim(alldims, dim), dims)
+
+function DimArray(
+    dict::AbstractDict,
+    dim::Type{<:Dimension};
+    kw...
+)
+    data = values(dict) |> collect
+    dims = (keys(dict) |> collect |> dim,)
+
+    return DimArray(data, dims; kw...)
+end
