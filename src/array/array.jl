@@ -975,3 +975,14 @@ function DimArray(
 
     return DimArray(data, dims; kw...)
 end
+
+function DimArray(
+    pairs::AbstractVector{<:Pair},
+    dim::Type{<:Dimension};
+    kw...
+)
+    data = last.(pairs)
+    dims = first.(pairs) |> dim
+
+    return DimArray(data, dims; kw...)
+end
